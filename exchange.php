@@ -1,68 +1,94 @@
 <?php
 session_start();
 include_once 'config.php';
-if (!isset($_SESSION['username'])) {
-    header("Location: index.php");
-} else {
-$result = mysqli_query($conn,"SELECT * FROM employee");
-$getusername = $_SESSION['username'];
-$getaccid = $_SESSION['accid'];
-$query = mysqli_query($conn,"SELECT * FROM users WHERE baccid = '$getaccid'");
-$result = $query->fetch_assoc();
-$money = $result['money'];
-$cardid = $result['cardid'];
-$dolar = $result['dolar'];
+include 'api/SessionHandler.php';
+$getsessioncookie = $_COOKIE['sess_id'];
+if(sess_verify($getsessioncookie) == 1) {
+$get_user_unique_id = get_sess_user($getsessioncookie);
 
-$jsonitem = file_get_contents("../devlet.nomee6.xyz/doviz.json");
+$query = $db->query("SELECT * FROM users WHERE user_id = '{$get_user_unique_id}'",PDO::FETCH_ASSOC);
+$dataquery = $query->fetch(PDO::FETCH_ASSOC);
+$getusername = $dataquery['username'];
+$getuserrole = $dataquery['role'];
+$getusermoney = $dataquery['money'];
+$getuserdolar = $dataquery['dolar'];
 
-$objitems = json_decode($jsonitem);
-$findBydolar = function($id) use ($objitems) {
-foreach ($objitems as $dolar) {
-    if ($dolar->id == $id) return $dolar->value;
- }
-};
-
+$sys_Q = $db->query("SELECT * FROM sys WHERE name = 'dolar'",PDO::FETCH_ASSOC);
+$sys_Q_query = $sys_Q->fetch(PDO::FETCH_ASSOC);
+$get_dolar_current_price = $sys_Q_query['value'];
+  
 if (isset($_POST['dolaral'])) {
 $dolarmiktar = $_POST['dolarmiktar'];
-$totaldolartutar = $findBydolar("dolar")*$dolarmiktar;
-$newdolarmiktar = $dolar+$dolarmiktar;
-if($money < $totaldolartutar) {
+$totaldolartutar = $get_dolar_current_price*$dolarmiktar;
+$newdolarmiktar = $getuserdolar+$dolarmiktar;
+$dolarmiktar_is_numeric = is_numeric($dolarmiktar);
+if($dolarmiktar_is_numeric) {
+
+if($dolarmiktar < 1) {
+    echo "Girdiğiniz tutar geçerli değildir.";
+} else {
+if($getusermoney < $totaldolartutar) {
     echo "Paranız bu işlem için yeterli değildir.";
 } else {
-    $newmoney = $money - $totaldolartutar;
-    $sql5 = "UPDATE users SET money = '$newmoney', dolar = '$newdolarmiktar' WHERE baccid = '$getaccid'";
-    $run_query = mysqli_query($conn, $sql5);
-    if($run_query){
+    $newmoney = $getusermoney - $totaldolartutar;
+  
+  	$update_user_m_d = $db->prepare("UPDATE users SET
+			money = :new_money,
+            dolar = :new_dolar
+			WHERE user_id = :userid");
+	$update_user_m_d_query = $update_user_m_d->execute(array(
+     		"new_money" => "$newmoney",
+      		"new_dolar" => "$newdolarmiktar",
+     		"userid" => "$get_user_unique_id"
+	));
+    if($update_user_m_d_query){
         echo "Başarıyla $dolarmiktar tutarında dolar satın aldınız.";
         header('Refresh:0');
     } else {
        echo "Bir hata oluştu!";
     }
+}}
+} else {
+	echo "Girdiğiniz veri bir sayı değil.";
 }
 };
-
-
+  
 if (isset($_POST['dolarsat'])) {
 $satdolarmiktar = $_POST['satdolarmiktar'];
-$sattotaldolartutar = $findBydolar("dolar")*$satdolarmiktar;
-$satnewdolarmiktar = $dolar-$satdolarmiktar;
-if($dolar < $satdolarmiktar) {
+$sattotaldolartutar = $get_dolar_current_price*$satdolarmiktar;
+$satnewdolarmiktar = $getuserdolar-$satdolarmiktar;
+$s_dolarmiktar_is_numeric = is_numeric($satdolarmiktar);
+if($s_dolarmiktar_is_numeric) {
+if($satdolarmiktar < 1) {
+    echo "Girdiğiniz tutar geçerli değildir.";
+} else {
+if($getuserdolar < $satdolarmiktar) {
     echo "Paranız bu işlem için yeterli değildir.";
 } else {
-    $satnewmoney = $money + $sattotaldolartutar;
-    $sql6 = "UPDATE users SET money = '$satnewmoney', dolar = '$satnewdolarmiktar' WHERE baccid = '$getaccid'";
-    $run_query = mysqli_query($conn, $sql6);
-    if($run_query){
+    $satnewmoney = $getusermoney + $sattotaldolartutar;
+  	$s_update_user_m_d = $db->prepare("UPDATE users SET
+			money = :new_money,
+            dolar = :new_dolar
+			WHERE user_id = :userid");
+	$s_update_user_m_d_query = $s_update_user_m_d->execute(array(
+     		"new_money" => "$satnewmoney",
+      		"new_dolar" => "$satnewdolarmiktar",
+     		"userid" => "$get_user_unique_id"
+	));
+    if($s_update_user_m_d_query){
         echo "Başarıyla $dolarmiktar tutarında dolar sattınız.";
         header('Refresh:0');
     } else {
        echo "Bir hata oluştu!";
     }
+}}
+} else {
+	echo "Girdiğiniz veri bir sayı değil.";
 }
-
-
 };
-
+  
+} else {
+    header("Location: login");
 }
 ?>
 
@@ -72,7 +98,7 @@ if($dolar < $satdolarmiktar) {
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
     <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
-    <title>NOMEE6 BANK</title>
+    <title>Döviz | Nomee6 Bank</title>
     <!-- CSS files -->
     <link href="https://devlet.nomee6.xyz/dist/css/tabler.min.css" rel="stylesheet"/>
     <link href="https://devlet.nomee6.xyz/dist/css/tabler-flags.min.css" rel="stylesheet"/>
@@ -83,15 +109,14 @@ if($dolar < $satdolarmiktar) {
     <meta property="og:url" content="https://bank.nomee6.xyz" />
     <meta property="og:image" content="https://nomee6.xyz/assets/A.png" />
     <meta property="og:description" content="E-Devlette ki eski klasik banka sistemi yeni modern ve gelişmiş bir sisteme taşındı." />
-	<?php 
-	$username = $_SESSION['username'];
+	<?php
 	echo("
 	<!-- Matomo -->
 	  <script>
 		var _paq = window._paq = window._paq || [];
 		_paq.push(['trackPageView']);
 		_paq.push(['enableLinkTracking']);
-		_paq.push(['setUserId', '$username']);
+		_paq.push(['setUserId', '$getusername']);
 		_paq.push(['enableHeartBeatTimer']);
 		(function() {
 			var u=\"https://matomo.aliyasin.org/\";
@@ -128,14 +153,24 @@ if($dolar < $satdolarmiktar) {
             <a href="?theme=light" class="nav-link px-0 hide-theme-light" title="Açık Temayı Etkinleştir" data-bs-toggle="tooltip" data-bs-placement="bottom">
               <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><circle cx="12" cy="12" r="4" /><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7" /></svg>
             </a>
+            <?php
+            if(strstr($_SERVER['HTTP_USER_AGENT'], "Nomee6 Bank Android Client")) { 
+	    		echo '
+             <div class="nav-item">
+              <a href="notifications" class="nav-link" tabindex="-1" aria-label="Bildirimleri Göster">
+                <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M10 5a2 2 0 0 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3h-16a4 4 0 0 0 2 -3v-3a7 7 0 0 1 4 -6" /><path d="M9 17v1a3 3 0 0 0 6 0v-1" /></svg>
+              </a>
+            </div>';
+    		};
+            ?>
             <div class="nav-item dropdown">
               <a href="#" class="nav-link d-flex lh-1 text-reset p-0" data-bs-toggle="dropdown" aria-label="Open user menu">
                 <div class="d-none d-xl-block ps-2">
-                  <div><?php echo($_SESSION['username']) ?></div>
+                  <div><?php echo($getusername) ?></div>
                 </div>
               </a>
               <div class="dropdown-menu dropdown-menu-end dropdown-menu-arrow">
-              <a href="logout.php" class="dropdown-item">Çıkış Yap</a>
+              <a href="logout" class="dropdown-item">Çıkış Yap</a>
               </div>
             </div>
           </div>
@@ -147,7 +182,7 @@ if($dolar < $satdolarmiktar) {
             <div class="container-xl">
               <ul class="navbar-nav">
                 <li class="nav-item">
-                  <a class="nav-link" href="panel.php" >
+                  <a class="nav-link" href="panel" >
                     <span class="nav-link-icon d-md-none d-lg-inline-block">
                       <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><polyline points="5 12 3 12 12 3 21 12 19 12" /><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7" /><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6" /></svg>
                     </span>
@@ -157,7 +192,7 @@ if($dolar < $satdolarmiktar) {
                   </a>
                 </li>
                 <li class="nav-item active">
-                  <a class="nav-link" href="exchange.php" >
+                  <a class="nav-link" href="exchange" >
                     <span class="nav-link-icon d-md-none d-lg-inline-block">
                       <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-currency-dollar" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
                         <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
@@ -171,7 +206,7 @@ if($dolar < $satdolarmiktar) {
                   </a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link" href="transfer_iban.php" >
+                  <a class="nav-link" href="transfer_iban" >
                     <span class="nav-link-icon d-md-none d-lg-inline-block">
                       <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-tabler icon-tabler-transfer-in" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
                         <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
@@ -208,11 +243,11 @@ if($dolar < $satdolarmiktar) {
                 <div class="card">
                   <div class="card-body">
                     <div class="d-flex align-items-center">
-                      <div class="subheader">Toplam ₺</div>
+                      <div class="subheader">Toplam Nomee6 Lirası</div>
                       <div class="ms-auto lh-1">
                       </div>
                     </div>
-                    <div class="h1 mb-3"><?php echo $money; ?>₺</div>
+                    <div class="h1 mb-3"><?php echo $getusermoney; ?>₺</div>
                   </div>
                 </div>
             </div>
@@ -220,16 +255,16 @@ if($dolar < $satdolarmiktar) {
                 <div class="card">
                   <div class="card-body">
                     <div class="d-flex align-items-center">
-                      <div class="subheader">Toplam $</div>
+                      <div class="subheader">Toplam DOLLAR</div>
                       <div class="ms-auto lh-1">
                       </div>
                     </div>
                     <div class="d-flex align-items-baseline">
                       <div class="h1 mb-0 me-2"><?php
-                        if($dolar == "") {
-                            $dolar = "0";
+                        if($getuserdolar == "") {
+                            $getuserdolar = "0";
                         }
-                        echo $dolar;
+                        echo $getuserdolar;
                         ?>$</div>
                       <div class="me-auto">
                       </div>
@@ -247,7 +282,7 @@ if($dolar < $satdolarmiktar) {
                     </div>
                     <div class="d-flex align-items-baseline">
                       <div class="h1 mb-0 me-2"><?php
-                        echo $findBydolar("dolar");
+                        echo $get_dolar_current_price;
                         ?>₺</div>
                       <div class="me-auto">
                       </div>
@@ -291,27 +326,6 @@ if($dolar < $satdolarmiktar) {
                       </div>
                     </div>
                   </div>
-        <footer class="footer footer-transparent d-print-none">
-          <div class="container-xl">
-            <div class="row text-center align-items-center flex-row-reverse">
-              <div class="col-lg-auto ms-lg-auto">
-                <ul class="list-inline list-inline-dots mb-0">
-                  </li>
-                </ul>
-              </div>
-              <div class="col-12 col-lg-auto mt-3 mt-lg-0">
-                <ul class="list-inline list-inline-dots mb-0">
-                  <li class="list-inline-item">
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </footer>
-      </div>
-    </div>
-    <!-- Libs JS -->
-    <script src="https://devlet.nomee6.xyz/dist/libs/apexcharts/dist/apexcharts.min.js"></script>
     <!-- Tabler Core -->
     <script src="https://devlet.nomee6.xyz/dist/js/tabler.min.js"></script>
     <script src="https://devlet.nomee6.xyz/dist/js/demo.min.js"></script>
