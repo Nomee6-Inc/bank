@@ -1,41 +1,38 @@
 <?php
 session_start();
 include_once 'config.php';
+include 'api/SessionHandler.php';
 $getcardid = $_GET['cardid'];
-if (!isset($_SESSION['username'])) {
-    header("Location: index.php");
-} else {
-$getusername = $_SESSION['username'];
-$getaccid = $_SESSION['accid'];
-$query = mysqli_query($conn,"SELECT * FROM users WHERE baccid = '$getaccid'");
-$result = $query->fetch_assoc();
-$cardid = $result['cardid'];
+$getsessioncookie = $_COOKIE['sess_id'];
+if(sess_verify($getsessioncookie) == 1) {
+$get_user_unique_id = get_sess_user($getsessioncookie);
 
-$query1 = mysqli_query($conn, "SELECT * FROM cards WHERE cardid = '$getcardid'");
-$result1 = $query1->fetch_assoc();
-$owner = $result1['owner'];
-$dbcardid = $result1['id'];
+$query = $db->query("SELECT * FROM users WHERE user_id = '{$get_user_unique_id}'",PDO::FETCH_ASSOC);
+$dataquery = $query->fetch(PDO::FETCH_ASSOC);
+$getusername = $dataquery['username'];
+$getuserrole = $dataquery['role'];
+$getusermoney = $dataquery['money'];
+$getuserdolar = $dataquery['dolar'];
+  
+$card_query = $db->query("SELECT * FROM cards WHERE cardid = '{$getcardid}'",PDO::FETCH_ASSOC);
+$card_data_query = $card_query->fetch(PDO::FETCH_ASSOC);
+$owner = $card_data_query['owner'];
+$dbcardid = $card_data_query['id'];
+  
 if($owner != $getusername) {
-    header("Location: panel.php");
+	header("Location: panel");
 } else {
-    if(strstr($cardid, ",$getcardid")) {
-        $newcardsid = str_replace(",$getcardid", "", $cardid);
-    } else {
-        $newcardsid = str_replace("$getcardid", "", $cardid);
-    }
-    $cardsarray = explode(",", $cardid);
-    
-    $sql2 = "DELETE FROM `cards` WHERE `cards`.`id` = $dbcardid";
-    $query2 = mysqli_query($conn, $sql2);
-    
-    $sql3 = "UPDATE users SET cardid = '$newcardsid' WHERE baccid = '$getaccid'";
-    $query3 = mysqli_query($conn, $sql3);
-    
-    if($query2 && $query3) {
-        header("Location: panel.php");
-    } else {
-        echo "Bir hata oluştu!";
-    }
+$query = $db->prepare("DELETE FROM cards WHERE id = :id");
+$delete = $query->execute(array(
+   'id' => $dbcardid
+));
+if($delete) {
+    header("Location: panel");
+} else {
+    echo "Bir hata oluştu!";
 }
+}
+} else {
+    header("Location: login");
 }
 ?>
